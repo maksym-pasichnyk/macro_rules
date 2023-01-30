@@ -8,6 +8,10 @@
 
 template<size_t N>
 struct const_string : std::array<char, N> {
+    constexpr const_string(const char(&chars)[N]) {
+        std::copy_n(chars, N, std::array<char, N>::begin());
+    }
+
     [[nodiscard]] constexpr auto str() const -> std::string_view {
         return std::string_view(std::array<char, N>::data(), N - 1);
     }

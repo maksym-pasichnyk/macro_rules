@@ -49,13 +49,14 @@ struct MacroFragment : meta::parse::group<
 > {
     consteval static auto transform(auto ctx) {
         // todo: bind to name
+        constexpr auto name = std::get<1>(ctx.value()).id;
         constexpr auto spec = std::get<3>(ctx.value()).id;
 
         if constexpr (spec == fnv1a("ident")) {
-            return meta::parse::token<TokenType::Identifier>{};
+            return meta::parse::with_name<name, meta::parse::token<TokenType::Identifier>>{};
         }
         if constexpr (spec == fnv1a("expr")) {
-            return Expression{};
+            return meta::parse::with_name<name, Expression>{};
         }
     }
 };

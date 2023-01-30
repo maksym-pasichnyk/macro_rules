@@ -29,19 +29,20 @@ struct FunctionContext {
     }
 };
 
-/*
- * Currently names are useless.
- * In future updates, parts of DSL can be accessed by their names
- */
 struct Function : macro_rules(
     ($($param:ident)*) -> $body:expr
 ) {
     consteval static auto transform(auto ctx) {
         constexpr auto params = std::apply(
-            [](auto... args) { return std::array{args.id...}; },
-            std::get<1>(std::get<0>(ctx.value()))
+            [](auto... args) {
+                return std::array{
+                    static_cast<size_t>(args.id)...
+                };
+            },
+            meta::parse::get<"param">(ctx.value())
         );
-        constexpr auto body = std::get<2>(ctx.value());
+
+        constexpr auto body = std::get<0>(meta::parse::get<"body">(ctx.value()));
         return wrap<FunctionContext<params>{}, body>();
     }
 
