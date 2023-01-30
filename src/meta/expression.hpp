@@ -6,16 +6,20 @@
 
 #include "meta.hpp"
 
-struct Variable : meta::parse::token<TokenType::Identifier> {
+struct Variable {
+    size_t id;
+};
+
+struct VariableExpression : meta::parse::token<TokenType::Identifier> {
     consteval static auto transform(auto ctx) {
         return [](auto ctx_, const auto& args) {
-            constexpr auto name = meta::parse::Ident{decltype(ctx){}.value().id};
+            constexpr auto name = Variable{decltype(ctx){}.value().id};
             return ctx_.template get<name>(args);
         };
     }
 };
 
-struct NumberLiteral : meta::parse::token<TokenType::Number> {
+struct NumberLiteralExpression : meta::parse::token<TokenType::Number> {
     consteval static auto transform(auto ctx) {
         return [](auto ctx_, const auto& args) {
             return static_cast<int>(decltype(ctx){}.value().id);
@@ -36,7 +40,9 @@ struct WithParens : meta::parse::group<
 
 struct Expression;
 
-struct Primitive : meta::parse::one_of<Variable, NumberLiteral, WithParens<Expression>> {};
+struct PrimitiveExpression : meta::parse::one_of<VariableExpression, NumberLiteralExpression, WithParens<Expression>> {
+
+};
 
 struct UnaryExpression {
     struct prefix : meta::parse::group<
@@ -70,7 +76,7 @@ struct UnaryExpression {
     };
 
     consteval static auto compile(auto stream) {
-        return meta::parse::one_of<prefix, Primitive>::compile(stream);
+        return meta::parse::one_of<prefix, PrimitiveExpression>::compile(stream);
     }
 };
 
@@ -135,7 +141,7 @@ struct AdditionExpression {
 };
 
 struct ComparisonExpression {
-    struct infix : meta::parse::group<
+    struct infix : WithParens<meta::parse::group<
         AdditionExpression,
         meta::parse::one_of<
             meta::parse::token<TokenType::LessThan>,
@@ -144,7 +150,7 @@ struct ComparisonExpression {
             meta::parse::token<TokenType::GreaterEqual>
         >,
         AdditionExpression
-    > {
+    >> {
         consteval static auto transform(auto ctx) {
             return [] (auto ctx_, const auto& args) {
                 constexpr auto op = std::get<1>(decltype(ctx){}.value());

@@ -11,101 +11,70 @@
 
 namespace meta::parse {
     template<auto Fn>
-    struct wrapper {
-        static constexpr auto __value = Fn();
+    struct Wrapper {
+        static constexpr auto stored = Fn();
 
         constexpr auto value() const {
-            return __value;
+            return stored;
         }
     };
-}
 
-namespace meta::parse {
-    template<typename Arg0>
-    struct Pair {
-        Arg0 arg0;
-        size_t arg1;
+    struct None {
+        constexpr explicit operator bool() const {
+            return false;
+        }
+    };
 
-        constexpr auto has_value() const -> bool {
+    template<typename V>
+    struct Result {
+        V value;
+        size_t current;
+
+        constexpr explicit operator bool() const {
             return true;
         }
     };
 
-    template<typename Arg0>
-    Pair(Arg0, size_t) -> Pair<Arg0>;
+    template<typename V>
+    Result(V, size_t) -> Result<V>;
 
-    struct None {};
-
-    struct Ident {
-        size_t id;
-    };
-
-    struct Number {
-        size_t num;
-    };
-
-    template<typename... T>
-    using Group = std::tuple<T...>;
-
-    consteval auto is_none(const None& r) -> bool {
-        return true;
-    }
-    consteval auto is_none(const auto& r) -> bool {
-        return false;
-    }
-    consteval auto is_some(const None& r) -> bool {
-        return false;
-    }
-    consteval auto is_some(const auto& r) -> bool {
-        return true;
-    }
-
-    template<typename T>
-    consteval auto __compile(auto stream) {
-        constexpr auto r = wrapper<[] { return T::compile(decltype(stream){}); }>{};
-        if constexpr (is_none(r.value())) {
-            return None{};
-        } else {
-            constexpr auto v = wrapper<[] { return decltype(r)::__value.arg0; }>{};
-            if constexpr (requires{ T::transform(v); }) {
-                return Pair{T::transform(v), r.value().arg1};
-            } else {
-                return r.value();
-            }
-        }
+    constexpr auto is_none(const auto& v) -> bool {
+        return std::same_as<std::decay_t<decltype(v)>, None>;
     }
 }
 
 namespace meta::parse {
     template<typename T>
     consteval auto __list(auto stream, auto&&... args) {
-        constexpr auto r = wrapper<[] { return __compile<T>(decltype(stream){}); }>{};
-        if constexpr (is_none(r.value())) {
-            return Pair{std::tuple{std::forward<decltype(args)>(args)...}, stream.value().current()};
-        } else {
+        auto r = Wrapper<[] { return __compile<T>(decltype(stream){}); }>{};
+        if constexpr (r.value()) {
             return __list<T>(
-                wrapper<[] {
-                    return decltype(stream)::__value.at(decltype(r)::__value.arg1);
+                Wrapper<[] {
+                    return decltype(stream){}.value().at(decltype(r){}.value().current);
                 }>{},
-                std::forward<decltype(args)>(args)..., r.value().arg0
+                std::forward<decltype(args)>(args)..., r.value().value
             );
+        } else {
+            return Result{std::tuple{std::forward<decltype(args)>(args)...}, stream.value().current()};
         }
     }
 
     template<typename Head, typename... Tail>
     consteval auto __group(auto stream, auto&&... args) {
-        constexpr auto r = wrapper<[] { return __compile<Head>(decltype(stream){}); }>{};
-        if constexpr (is_none(r.value())) {
-            return None{};
-        } else if constexpr (sizeof...(Tail) > 0) {
-            return __group<Tail...>(
-                wrapper<[] {
-                    return decltype(stream)::__value.at(decltype(r)::__value.arg1);
-                }>{},
-                std::forward<decltype(args)>(args)..., r.value().arg0
-            );
+        auto r = Wrapper<[] { return __compile<Head>(decltype(stream){}); }>{};
+        if constexpr (r.value()) {
+            if constexpr (sizeof...(Tail) > 0) {
+                return __group<Tail...>(
+                    Wrapper<[] {
+                        return decltype(stream){}.value().at(decltype(r){}.value().current);
+                    }>{},
+                    std::forward<decltype(args)>(args)..., r.value().value
+                );
+            } else {
+                return Result{std::tuple{std::forward<decltype(args)>(args)..., r.value().value}, r.value().current};
+            }
         } else {
-            return Pair{std::tuple{std::forward<decltype(args)>(args)..., r.value().arg0}, r.value().arg1};
+            return None{};
         }
     }
 
@@ -115,11 +84,26 @@ namespace meta::parse {
 
     template<typename Head, typename... Tail>
     consteval auto __first(auto stream) {
-        constexpr auto r = __compile<Head>(decltype(stream){});
-        if constexpr (is_none(r)) {
-            return __first<Tail...>(stream);
-        } else {
+        auto r = __compile<Head>(decltype(stream){});
+        if constexpr (r) {
             return r;
+        } else {
+            return __first<Tail...>(stream);
+        }
+    }
+
+    template<typename T>
+    consteval auto __compile(auto stream) {
+        auto r = Wrapper<[] { return T::compile(decltype(stream){}); }>{};
+        if constexpr (r.value()) {
+            auto v = Wrapper<[] { return decltype(r){}.value().value; }>{};
+            if constexpr (requires{ T::transform(v); }) {
+                return Result{T::transform(v), r.value().current};
+            } else {
+                return r.value();
+            }
+        } else {
+            return None{};
         }
     }
 }
@@ -129,7 +113,7 @@ namespace meta::parse {
     struct token {
         consteval static auto compile(auto stream) {
             if constexpr (stream.value().token().is(type)) {
-                return Pair{stream.value().token(), stream.value().current() + 1};
+                return Result{stream.value().token(), stream.value().current() + 1};
             } else {
                 return None{};
             }
@@ -144,7 +128,7 @@ namespace meta::parse {
     struct ident {
         consteval static auto compile(auto stream) {
             if constexpr (stream.value().token().is(TokenType::Identifier) && stream.value().token().id == id) {
-                return Pair{Ident{stream.value().token().id}, stream.value().current() + 1};
+                return Result{stream.value().token(), stream.value().current() + 1};
             } else {
                 return None{};
             }
@@ -161,11 +145,10 @@ namespace meta::parse {
     template<typename T>
     struct opt {
         consteval static auto compile(auto stream) {
-            constexpr auto r = __compile<T>(stream);
-            if constexpr (is_none(r)) {
-                return Pair{None{}, stream.value().current()};
-            } else {
+            if constexpr (auto r = __compile<T>(stream)) {
                 return r;
+            } else {
+                return Result{None{}, stream.value().current()};
             }
         }
     };
@@ -180,13 +163,9 @@ namespace meta::parse {
     template<typename T>
     struct list_non_empty {
         consteval static auto compile(auto stream) {
-            constexpr auto r = __list<T>(stream);
-            if constexpr (is_some(r)) {
-                if constexpr (std::tuple_size_v<decltype(r.arg0)> != 0) {
-                    return r;
-                } else {
-                    return None{};
-                }
+            auto r = __list<T>(stream);
+            if constexpr (std::tuple_size_v<decltype(r.value)> != 0) {
+                return r;
             } else {
                 return None{};
             }
@@ -202,12 +181,14 @@ namespace meta::parse {
 
     template<typename T, const_string chars>
     consteval static auto compile() {
-        auto stream = wrapper<[] { return TokenStream::parse(chars.str()); }>{};
-        auto r = wrapper<[] { return __compile<T>(decltype(stream){}); }>{};
-        if constexpr (is_none(r.value())) {
-            return None{};
-        } else if constexpr (stream.value().at(r.value().arg1).token().is(TokenType::End)) {
-            return r.value().arg0;
+        auto stream = Wrapper<[] { return TokenStream::parse(chars.str()); }>{};
+        auto r = Wrapper<[] { return __compile<T>(decltype(stream){}); }>{};
+        if constexpr (r.value()) {
+            if constexpr (stream.value().at(r.value().current).token().is(TokenType::End)) {
+                return r.value().value;
+            } else {
+                return None{};
+            }
         } else {
             return None{};
         }

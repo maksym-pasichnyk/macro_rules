@@ -10,11 +10,11 @@
 template<typename T>
 struct MacroList : meta::parse::list<T> {
     consteval static auto transform(auto ctx) {
-        return decompose(ctx.value());
+        return unwrap(ctx.value());
     }
 
     template<typename Arg0, typename... U>
-    consteval static auto decompose(const meta::parse::Group<Arg0, U...>&) {
+    consteval static auto unwrap(const std::tuple<Arg0, U...>&) {
         if constexpr (sizeof...(U) == 0) {
             return Arg0{};
         } else {
@@ -85,15 +85,15 @@ struct MacroRepDef : meta::parse::group<
         constexpr auto arg2 = std::get<2>(ctx.value());
         constexpr auto arg4 = std::get<4>(ctx.value());
         constexpr auto arg5 = std::get<5>(ctx.value());
-        if constexpr (meta::parse::is_none(arg5)) {
-            return arg2;
-        } else {
+        if constexpr (!meta::parse::is_none(arg5)) {
             using Item = std::decay_t<decltype(arg2)>;
             if constexpr (arg5.is(TokenType::Asterisk)) {
                 return meta::parse::list<Item>{};
             } else {
                 return meta::parse::list_non_empty<Item>{};
             }
+        } else {
+            return arg2;
         }
     }
 };
@@ -116,12 +116,12 @@ struct MacroMatcher : meta::parse::one_of<
     >
 > {
     template<typename... U>
-    consteval static auto decompose(const meta::parse::Group<U...>&) {
+    consteval static auto unwrap(const std::tuple<U...>&) {
         return meta::parse::group<U...>{};
     }
 
     consteval static auto transform(auto ctx) {
-        return decompose(ctx.value());
+        return unwrap(ctx.value());
     }
 };
 
