@@ -1,3 +1,15 @@
+# Introduction
+
+Header-only library for compile-time parsing. <br/>
+Library provides `macro_rules` macro that allows to describe own DSL. <br/>
+Syntax of `macro_rules` was inspired by Rust, but with some limitations. <br/>
+DSL can be implemented directly using templates, for more flexibility.
+
+This project is currently under development and not well tested and not documented.
+
+# Code Example
+
+```c++
 #include "meta/meta_rules.hpp"
 
 template<std::array params>
@@ -17,16 +29,18 @@ struct FunctionContext {
     }
 };
 
+/*
+ * Currently names are useless.
+ * In future updates, parts of DSL can be accessed by their names
+ */
 struct Function : macro_rules(
     ($($param:ident)*) -> $body:expr
 ) {
     consteval static auto transform(auto ctx) {
-        // todo: ctx.get<"param">()
         constexpr auto params = std::apply(
             [](auto... args) { return std::array{args.id...}; },
             std::get<1>(std::get<0>(ctx.value()))
         );
-        // todo: ctx.get<"body">()
         constexpr auto body = std::get<2>(ctx.value());
         return wrap<FunctionContext<params>{}, body>();
     }
@@ -49,3 +63,4 @@ auto main() -> int {
     static_assert(fn1(1, 2, 3, 4) == fn2(1, 2, 3, 4));
     return 0;
 }
+```
