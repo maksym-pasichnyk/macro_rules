@@ -1,6 +1,6 @@
 # Introduction
 
-Header-only library for compile-time parsing. <br/>
+Header-only library for compile-time DSL. <br/>
 Library provides `macro_rules` macro that allows to describe own DSL. <br/>
 Syntax of `macro_rules` was inspired by Rust, but with some limitations. <br/>
 DSL can be implemented directly using templates, for more flexibility.
@@ -8,6 +8,33 @@ DSL can be implemented directly using templates, for more flexibility.
 This project is currently under development and not well tested and not documented.
 
 # Code Example
+
+```c++
+#include "meta/meta_rules.hpp"
+
+/** This would be equivalent to macro_rules(sum $(args:number)*) **/
+struct Example : meta::parse::group<
+    meta::parse::ident<fnv1a("sum")>,
+    meta::parse::list<
+        meta::parse::with_name<
+            fnv1a("args"),
+            meta::parse::token<TokenType::Number>
+        >
+    >
+> {
+    consteval static auto transform(auto ctx) {
+        return std::apply(
+            [](auto... args) {
+                return (static_cast<int>(args.id) + ...);
+            },
+            meta::parse::get<"args">(ctx.value())
+        );
+    }
+};
+
+static_assert(apply_rules(Example, sum 1 2 3 4) == 10);
+
+```
 
 ```c++
 #include "meta/meta_rules.hpp"

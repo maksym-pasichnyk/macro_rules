@@ -1,5 +1,26 @@
 #include "meta/meta_rules.hpp"
 
+struct Example : meta::parse::group<
+    meta::parse::ident<fnv1a("sum")>,
+    meta::parse::list<
+        meta::parse::with_name<
+            fnv1a("args"),
+            meta::parse::token<TokenType::Number>
+        >
+    >
+> {
+    consteval static auto transform(auto ctx) {
+        return std::apply(
+            [](auto... args) {
+                return (static_cast<int>(args.id) + ...);
+            },
+            meta::parse::get<"args">(ctx.value())
+        );
+    }
+};
+
+static_assert(apply_rules(Example, sum 1 2 3 4) == 10);
+
 template<std::array params>
 struct FunctionContext {
     template<Variable name>

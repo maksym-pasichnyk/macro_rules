@@ -37,6 +37,7 @@ struct MacroToken : meta::parse::token<type> {
 };
 
 using MacroFragSpec = meta::parse::one_of<
+    meta::parse::ident<fnv1a("number")>,
     meta::parse::ident<fnv1a("ident")>,
     meta::parse::ident<fnv1a("expr")>
 >;
@@ -48,10 +49,12 @@ struct MacroFragment : meta::parse::group<
     MacroFragSpec
 > {
     consteval static auto transform(auto ctx) {
-        // todo: bind to name
         constexpr auto name = std::get<1>(ctx.value()).id;
         constexpr auto spec = std::get<3>(ctx.value()).id;
 
+        if constexpr (spec == fnv1a("number")) {
+            return meta::parse::with_name<name, meta::parse::token<TokenType::Number>>{};
+        }
         if constexpr (spec == fnv1a("ident")) {
             return meta::parse::with_name<name, meta::parse::token<TokenType::Identifier>>{};
         }
