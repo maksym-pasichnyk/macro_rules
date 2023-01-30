@@ -14,12 +14,12 @@ This project is currently under development and not well tested and not document
 
 template<std::array params>
 struct FunctionContext {
-    template<meta::parse::Ident name>
+    template<Variable name>
     constexpr auto get(const auto& args) {
         return std::get<get_argument_index(name)>(args);
     }
 
-    constexpr static auto get_argument_index(meta::parse::Ident name) -> size_t {
+    constexpr static auto get_argument_index(Variable name) -> size_t {
         for (size_t i = 0; i < params.size(); ++i) {
             if (params[i] == name.id) {
                 return i;
